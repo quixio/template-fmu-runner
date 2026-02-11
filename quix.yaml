@@ -6,7 +6,7 @@ metadata:
 
 # This section describes the Deployments of the data pipeline
 deployments:
-  - name: Simulation API
+  - name: Simulation API & UI
     application: http-api-source
     version: latest
     deploymentType: Service
@@ -51,35 +51,6 @@ deployments:
         label: Simulink Runner
         icon: drag_indicator
         order: 1
-  # - name: Simulink Runner
-  #   application: simulink-runner
-  #   version: latest
-  #   deploymentType: Service
-  #   resources:
-  #     cpu: 1000
-  #     memory: 2000
-  #     replicas: 1
-  #   state:
-  #     enabled: true
-  #     size: 1
-  #   variables:
-  #     - name: input
-  #       inputType: InputTopic
-  #       description: Name of the input topic to listen to (simulation requests from HTTP API).
-  #       value: simulation
-  #     - name: output
-  #       inputType: OutputTopic
-  #       description: Name of the output topic to write simulation results to.
-  #       value: simulation-results
-  #     - name: API_URL
-  #       inputType: FreeText
-  #       description: URL of the Simulation API for fetching model binaries
-  #       value: http://simulation-api:80
-  #     - name: HTTP_AUTH_TOKEN
-  #       inputType: Secret
-  #       description: Auth token for API requests (shared with Simulation API)
-  #       required: true
-  #       secretKey: http_auth_token
   - name: FMU Runner
     application: fmu-runner
     version: latest

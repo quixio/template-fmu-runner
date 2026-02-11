@@ -14,7 +14,7 @@ An automated parameter optimization system for FMU (Functional Mock-up Unit) sim
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   HTTP API  │────▶│  FMU Runner │────▶│  Validator  │
+│   HTTP API  │───▶│  FMU Runner │────▶│  Validator  │
 │  (Frontend) │     │   (fmpy)    │     │             │
 └─────────────┘     └─────────────┘     └──────┬──────┘
                                                │
