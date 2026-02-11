@@ -1,0 +1,15 @@
+name: Simulation Frontend
+language: nodejs
+variables:
+  - name: API_URL
+    inputType: FreeText
+    description: Full URL to the http-api service simulation endpoint (e.g. https://http-api-xxx.deployments.quix.io/simulation)
+    defaultValue: ""
+    required: true
+  - name: HTTP_AUTH_TOKEN
+    inputType: Secret
+    description: Authentication token for API requests (must match HTTP_AUTH_TOKEN in http-api service)
+    defaultValue: ""
+    required: true
+dockerfile: dockerfile
+defaultFile: src/App.svelte

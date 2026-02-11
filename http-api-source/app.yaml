@@ -1,0 +1,19 @@
+name: Simulation API
+language: python
+variables:
+  - name: output
+    inputType: OutputTopic
+    description: The Kafka topic to publish simulation requests to.
+    defaultValue: simulation
+    required: true
+  - name: HTTP_AUTH_TOKEN
+    inputType: Secret
+    description: A security token for authorizing simulation submissions.
+    required: true
+  - name: QUIXLAKE_API_URL
+    inputType: FreeText
+    description: QuixLake API URL for data lake queries
+    required: true
+dockerfile: dockerfile
+runEntryPoint: main.py
+defaultFile: main.py

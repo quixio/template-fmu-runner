@@ -1,0 +1,273 @@
+# Quix Project Descriptor
+# This file describes the data pipeline and configuration of resources of a Quix Project.
+
+metadata:
+  version: 1.0
+
+# This section describes the Deployments of the data pipeline
+deployments:
+  - name: Simulation API
+    application: http-api-source
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 500
+      replicas: 1
+    publicAccess:
+      enabled: true
+      urlPrefix: simulation-api
+    state:
+      enabled: true
+      size: 1
+    network:
+      serviceName: simulation-api
+      ports:
+        - port: 80
+          targetPort: 80
+    variables:
+      - name: output
+        inputType: OutputTopic
+        description: The Kafka topic to publish simulation requests to.
+        required: true
+        value: simulation
+      - name: HTTP_AUTH_TOKEN
+        inputType: Secret
+        description: A security token for authorizing simulation submissions.
+        required: true
+        secretKey: http_auth_token
+      - name: QUIXLAKE_API_URL
+        inputType: FreeText
+        description: QuixLake API URL for data lake queries
+        required: true
+        value: https://quixlake-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+    plugin:
+      embeddedView:
+        enabled: true
+        hideHeader: true
+        default: true
+      sidebarItem:
+        show: true
+        label: Simulink Runner
+        icon: drag_indicator
+        order: 1
+  # - name: Simulink Runner
+  #   application: simulink-runner
+  #   version: latest
+  #   deploymentType: Service
+  #   resources:
+  #     cpu: 1000
+  #     memory: 2000
+  #     replicas: 1
+  #   state:
+  #     enabled: true
+  #     size: 1
+  #   variables:
+  #     - name: input
+  #       inputType: InputTopic
+  #       description: Name of the input topic to listen to (simulation requests from HTTP API).
+  #       value: simulation
+  #     - name: output
+  #       inputType: OutputTopic
+  #       description: Name of the output topic to write simulation results to.
+  #       value: simulation-results
+  #     - name: API_URL
+  #       inputType: FreeText
+  #       description: URL of the Simulation API for fetching model binaries
+  #       value: http://simulation-api:80
+  #     - name: HTTP_AUTH_TOKEN
+  #       inputType: Secret
+  #       description: Auth token for API requests (shared with Simulation API)
+  #       required: true
+  #       secretKey: http_auth_token
+  - name: FMU Runner
+    application: fmu-runner
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 500
+      replicas: 1
+    state:
+      enabled: true
+      size: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Name of the input topic to listen to (simulation requests from HTTP API).
+        value: simulation
+      - name: output
+        inputType: OutputTopic
+        description: Name of the output topic to write simulation results to.
+        value: simulation-results
+      - name: API_URL
+        inputType: FreeText
+        description: URL of the Simulation API for fetching FMU model binaries
+        value: http://simulation-api:80
+      - name: HTTP_AUTH_TOKEN
+        inputType: Secret
+        description: Auth token for API requests (shared with Simulation API)
+        required: true
+        secretKey: http_auth_token
+  - name: Validator
+    application: validator
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 500
+      replicas: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Name of the input topic to listen to (simulation results).
+        value: simulation-results
+      - name: output_success
+        inputType: OutputTopic
+        description: Name of the output topic for successful validations.
+        value: validation-success
+      - name: output_failure
+        inputType: OutputTopic
+        description: Name of the output topic for failed validations.
+        value: validation-failure
+  - name: Test Generator
+    application: test-generator
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 500
+      replicas: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Topic for failed validations.
+        value: validation-failure
+      - name: output
+        inputType: OutputTopic
+        description: Topic to publish new test configurations.
+        value: simulation
+      - name: NUM_TESTS
+        inputType: FreeText
+        description: Number of test variations to generate per failure.
+        value: 10
+  - name: Quix DataLake Timeseries Sink
+    application: quix-datalake-timeseries-sink
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 2000
+      replicas: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Kafka input topic for validation failures
+        required: true
+        value: validation-failure
+      - name: input_success
+        inputType: InputTopic
+        description: Kafka input topic for validation successes
+        value: validation-success
+      - name: S3_BUCKET
+        inputType: FreeText
+        description: S3 bucket name for storing Parquet files
+        required: true
+        value: quixdatalaketest
+      - name: S3_PREFIX
+        inputType: FreeText
+        description: S3 prefix/path for data files
+        value: ts_test
+      - name: TABLE_NAME
+        inputType: FreeText
+        description: Table name for data organization and registration, else defaults to topic name
+        value: validation_failures
+      - name: HIVE_COLUMNS
+        inputType: FreeText
+        description: Comma-separated list of columns for Hive partitioning. Include year/month/day/hour to extract from TIMESTAMP_COLUMN (e.g., location,year,month,day,sensor_type)
+        value: model_filename,year,month,day
+      - name: TIMESTAMP_COLUMN
+        inputType: FreeText
+        description: Column containing timestamp values to extract year/month/day/hour from
+        value: ts_ms
+      - name: CATALOG_URL
+        inputType: FreeText
+        description: REST Catalog URL for optional table registration (leave empty to skip)
+        value: https://iceberg-catalog-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+      - name: CATALOG_AUTH_TOKEN
+        inputType: Secret
+        description: If using a catalog, the respective auth token to access it
+        secretKey: catalog_token
+      - name: AUTO_DISCOVER
+        inputType: FreeText
+        description: Automatically register table in REST Catalog on first write
+        value: true
+      - name: CATALOG_NAMESPACE
+        inputType: FreeText
+        description: Catalog namespace for table registration
+        value: default
+      - name: BATCH_SIZE
+        inputType: FreeText
+        description: Number of messages to batch before writing to S3
+        value: 1000
+      - name: COMMIT_INTERVAL
+        inputType: FreeText
+        description: Kafka commit interval in seconds
+        value: 30
+      - name: KAFKA_KEY_DESERIALIZER
+        inputType: FreeText
+        description: The key deserializer to use
+        value: str
+      - name: KAFKA_VALUE_DESERIALIZER
+        inputType: FreeText
+        description: the value deserializer to use
+        value: json
+      - name: CONSUMER_GROUP
+        inputType: FreeText
+        description: Kafka consumer group name
+        value: s3_direct_sink_v1.0
+      - name: AUTO_OFFSET_RESET
+        inputType: FreeText
+        description: Where to start consuming if no offset exists
+        value: earliest
+      - name: AWS_ACCESS_KEY_ID
+        inputType: Secret
+        description: AWS Access Key ID for S3 access
+        secretKey: s3_user
+      - name: AWS_SECRET_ACCESS_KEY
+        inputType: Secret
+        description: AWS Secret Access Key for S3 access
+        secretKey: s3_password
+      - name: AWS_REGION
+        inputType: FreeText
+        description: AWS region for S3 bucket
+        value: local
+      - name: AWS_ENDPOINT_URL
+        inputType: FreeText
+        description: S3 endpoint url (for non-AWS endpoints)
+        value: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+      - name: LOGLEVEL
+        inputType: FreeText
+        description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        value: INFO
+      - name: MAX_WRITE_WORKERS
+        inputType: FreeText
+        description: How many files can be written in parallel to S3 at once (based on partitioning + batch size)
+        value: 10
+
+# This section describes the Topics of the data pipeline
+topics:
+  - name: simulation
+    dataTier: Bronze
+  - name: simulation-results
+    dataTier: Silver
+  - name: validation-success
+    dataTier: Gold
+  - name: validation-failure
+    dataTier: Silver
+  - name: generated-opc_ua_data
+    dataTier: Bronze
+  - name: http_data
+    dataTier: Bronze
+  - name: normalized_data
+    dataTier: Silver

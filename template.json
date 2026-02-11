@@ -1,0 +1,14 @@
+{
+  "TemplateId": "fmu-simulation-feedback-loop",
+  "Name": "FMU Simulation Feedback Loop",
+  "SshUrl": "https://github.com/quixio/simulink-feedback-loop.git",
+  "Branch": "main",
+  "Description": "Automated parameter optimization for FMU simulations. Upload an FMU model with success criteria, and the system explores parameter variations to find configurations that meet your targets. Ideal for design optimization, sensitivity analysis, and automated testing of simulation models.",
+  "Tags": {
+    "languages": ["python", "svelte"],
+    "category": ["simulation", "optimization", "fmu"]
+  },
+  "ImageFile": "images/pipeline.png",
+  "ReadmeFile": "README.md",
+  "Published": true
+}

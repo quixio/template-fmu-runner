@@ -1,0 +1,18 @@
+name: Test Generator
+language: python
+variables:
+  - name: input
+    inputType: InputTopic
+    description: Topic for failed validations
+    defaultValue: validation-failure
+  - name: output
+    inputType: OutputTopic
+    description: Topic to publish new test configurations
+    defaultValue: simulation
+  - name: NUM_TESTS
+    inputType: FreeText
+    description: Number of test variations to generate per failure
+    defaultValue: "10"
+dockerfile: dockerfile
+runEntryPoint: main.py
+defaultFile: main.py

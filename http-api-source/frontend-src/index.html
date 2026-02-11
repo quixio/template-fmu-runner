@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulation Configuration</title>
+    <!-- Runtime configuration injected by Docker entrypoint -->
+    <script>
+      window.__API_URL__ = '__RUNTIME_API_URL__';
+      window.__HTTP_AUTH_TOKEN__ = '__RUNTIME_HTTP_AUTH_TOKEN__';
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

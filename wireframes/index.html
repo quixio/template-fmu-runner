@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Configuration</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="form-container">
+        <h1 class="form-title">Simulation Configuration</h1>
+
+        <!-- 1. Simulink Model Upload + 4. Threshold (side by side) -->
+        <div class="form-row">
+            <div class="form-section form-section--flex">
+                <label class="section-label">Simulink Model</label>
+                <div class="dropzone" id="model-dropzone">
+                    <div class="dropzone-content" id="model-content">
+                        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <p class="dropzone-text">Drag & drop your Simulink model here</p>
+                        <p class="dropzone-subtext">or click to browse</p>
+                    </div>
+                    <div class="file-info hidden" id="model-file-info">
+                        <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span class="file-name" id="model-filename">model.slx</span>
+                        <button class="remove-btn" id="model-remove" title="Remove file">×</button>
+                    </div>
+                    <input type="file" id="model-input" class="file-input" accept=".slx,.mdl">
+                </div>
+            </div>
+
+            <div class="form-section form-section--threshold">
+                <label class="section-label" for="threshold-input">Threshold</label>
+                <div class="input-wrapper">
+                    <input
+                        type="number"
+                        id="threshold-input"
+                        class="number-input"
+                        placeholder="Enter threshold value"
+                        step="any"
+                    >
+                    <span class="input-hint">Decimal values allowed</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. CSV Input Data Upload -->
+        <div class="form-section">
+            <label class="section-label">Input Data (CSV)</label>
+            <div class="dropzone" id="csv-dropzone">
+                <div class="dropzone-content" id="csv-content">
+                    <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p class="dropzone-text">Drag & drop your CSV file here</p>
+                    <p class="dropzone-subtext">or click to browse</p>
+                </div>
+                <input type="file" id="csv-input" class="file-input" accept=".csv">
+            </div>
+            <div class="preview-container hidden" id="csv-preview">
+                <div class="preview-header">
+                    <span class="preview-title">
+                        <svg class="preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span id="csv-filename">data.csv</span>
+                    </span>
+                    <button class="replace-btn" id="csv-replace">Replace File</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="csv-table">
+                        <thead>
+                            <tr>
+                                <th>Column A</th>
+                                <th>Column B</th>
+                                <th>Column C</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1.0</td><td>2.5</td><td>3.7</td></tr>
+                            <tr><td>4.2</td><td>5.1</td><td>6.8</td></tr>
+                            <tr><td>7.3</td><td>8.9</td><td>9.0</td></tr>
+                            <tr><td>10.5</td><td>11.2</td><td>12.4</td></tr>
+                            <tr><td>13.1</td><td>14.6</td><td>15.8</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="preview-note">Showing first 5 rows of 100</p>
+            </div>
+        </div>
+
+        <!-- 3. JSON Configuration Upload -->
+        <div class="form-section">
+            <label class="section-label">Configuration (JSON)</label>
+            <div class="dropzone" id="json-dropzone">
+                <div class="dropzone-content" id="json-content">
+                    <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p class="dropzone-text">Drag & drop your JSON config here</p>
+                    <p class="dropzone-subtext">or click to browse</p>
+                </div>
+                <input type="file" id="json-input" class="file-input" accept=".json">
+            </div>
+            <div class="editor-container hidden" id="json-editor-container">
+                <div class="editor-header">
+                    <span class="preview-title">
+                        <svg class="preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span id="json-filename">config.json</span>
+                    </span>
+                    <div class="editor-actions">
+                        <span class="validation-status valid" id="json-status">
+                            <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            Valid JSON
+                        </span>
+                        <button class="action-btn" id="json-prettify">Prettify</button>
+                        <button class="replace-btn" id="json-replace">Replace File</button>
+                    </div>
+                </div>
+                <textarea class="json-editor" id="json-textarea" spellcheck="false">{
+  "simulation": {
+    "name": "test_simulation",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "stepSize": 0.01,
+    "duration": 10.0,
+    "solver": "ode45"
+  },
+  "outputs": [
+    "result",
+    "timestamp"
+  ]
+}</textarea>
+                <div class="validation-error hidden" id="json-error">
+                    <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span class="error-text">Invalid JSON: Unexpected token at line 5</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-actions">
+            <button class="submit-btn" id="submit-btn">
+                <span>Run Simulation</span>
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

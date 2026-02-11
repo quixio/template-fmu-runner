@@ -1,0 +1,18 @@
+name: Validator
+language: python
+variables:
+  - name: input
+    inputType: InputTopic
+    description: Name of the input topic to listen to (simulation results).
+    defaultValue: simulation-results
+  - name: output_success
+    inputType: OutputTopic
+    description: Name of the output topic for successful validations.
+    defaultValue: validation-success
+  - name: output_failure
+    inputType: OutputTopic
+    description: Name of the output topic for failed validations.
+    defaultValue: validation-failure
+dockerfile: dockerfile
+runEntryPoint: main.py
+defaultFile: main.py

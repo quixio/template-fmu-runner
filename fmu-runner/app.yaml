@@ -1,0 +1,22 @@
+name: FMU Runner
+language: python
+variables:
+  - name: input
+    inputType: InputTopic
+    description: Name of the input topic to listen to (simulation requests from HTTP API).
+    defaultValue: simulation
+  - name: output
+    inputType: OutputTopic
+    description: Name of the output topic to write simulation results to.
+    defaultValue: simulation-results
+  - name: API_URL
+    inputType: FreeText
+    description: URL of the Simulation API for fetching FMU model binaries.
+    defaultValue: http://simulation-api:80
+  - name: HTTP_AUTH_TOKEN
+    inputType: Secret
+    description: Auth token for API requests (shared with Simulation API).
+    required: false
+dockerfile: dockerfile
+runEntryPoint: main.py
+defaultFile: main.py

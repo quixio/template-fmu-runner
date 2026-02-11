@@ -1,0 +1,26 @@
+{
+  "name": "simulation-frontend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/merge": "^6.11.2",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.35.0",
+    "@lezer/highlight": "^1.2.0",
+    "chart.js": "^4.4.1",
+    "svelte-codemirror-editor": "^1.4.0",
+    "thememirror": "^2.0.1"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "svelte": "^4.2.12",
+    "vite": "^5.2.0"
+  }
+}

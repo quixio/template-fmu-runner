@@ -1,0 +1,153 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  http-api:
+    build:
+      context: ./http-api-source
+      dockerfile: dockerfile
+    container_name: http-api
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - output=simulation
+      - HTTP_AUTH_TOKEN=local-dev-token
+      - USE_LOCAL_STORE=true
+      - validation_success_topic=validation-success
+      - validation_failure_topic=validation-failure
+    ports:
+      - "8080:80"
+    volumes:
+      - ./state:/app/state
+
+  simulink-runner:
+    build:
+      context: ./simulink-runner
+      dockerfile: dockerfile
+    container_name: simulink-runner
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      http-api:
+        condition: service_started
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - input=simulation
+      - output=simulation-results
+      - API_URL=http://http-api:80
+      - HTTP_AUTH_TOKEN=local-dev-token
+    volumes:
+      - ./state:/app/state
+
+  fmu-runner:
+    build:
+      context: ./fmu-runner
+      dockerfile: dockerfile
+    container_name: fmu-runner
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      http-api:
+        condition: service_started
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - input=simulation
+      - output=simulation-results
+      - API_URL=http://http-api:80
+      - HTTP_AUTH_TOKEN=local-dev-token
+    volumes:
+      - ./state:/app/state
+
+  validator:
+    build:
+      context: ./validator
+      dockerfile: dockerfile
+    container_name: validator
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - input=simulation-results
+      - output_success=validation-success
+      - output_failure=validation-failure
+
+  test-generator:
+    build:
+      context: ./test-generator
+      dockerfile: dockerfile
+    container_name: test-generator
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - input=validation-failure
+      - output=simulation
+      - NUM_TESTS=10
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  quix-datalake-timeseries-sink:
+    build:
+      context: ./quix-datalake-timeseries-sink
+      dockerfile: dockerfile
+    container_name: quix-datalake-timeseries-sink
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      - Quix__Broker__Address=redpanda:9092
+      - input=validation-failure
+      - input_success=validation-success
+      - S3_BUCKET=datalake
+      - S3_PREFIX=simulink
+      - HIVE_COLUMNS=model_filename,year,month,day
+      - TIMESTAMP_COLUMN=ts_ms
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - AUTO_OFFSET_RESET=earliest
+      - LOGLEVEL=INFO
+
+volumes:
+  minio-data:
