@@ -236,7 +236,7 @@ deployments:
         inputType: FreeText
         description: S3 endpoint url (for non-AWS endpoints)
         required: true
-        value: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+        value: http://minio:80
       - name: LOGLEVEL
         inputType: FreeText
         description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)

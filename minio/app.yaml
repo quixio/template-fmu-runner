@@ -9,7 +9,7 @@ variables:
   - name: MINIO_ROOT_PASSWORD
     inputType: Secret
     description: The root password to initialize Minio with
-    defaultValue: s3_password
+    secretKey: s3_password
     required: true
 dockerfile: dockerfile
 defaultFile: dockerfile

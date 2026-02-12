@@ -39,7 +39,7 @@ variables:
   - name: CATALOG_AUTH_TOKEN
     inputType: Secret
     description: If using a catalog, the respective auth token to access it
-    defaultValue: catalog_token
+    secretKey: catalog_token
   - name: AUTO_DISCOVER
     inputType: FreeText
     description: Automatically register table in REST Catalog on first write
@@ -87,7 +87,7 @@ variables:
   - name: AWS_ENDPOINT_URL
     inputType: FreeText
     description: S3 endpoint url (for non-AWS endpoints)
-    defaultValue: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+    defaultValue: http://minio:80
   - name: LOGLEVEL
     inputType: FreeText
     description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
