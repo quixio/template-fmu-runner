@@ -1,0 +1,16 @@
+name: minio
+language: docker
+variables:
+  - name: MINIO_ROOT_USER
+    inputType: FreeText
+    description: The root username to initialize Minio with
+    defaultValue: admin
+    required: true
+  - name: MINIO_ROOT_PASSWORD
+    inputType: Secret
+    description: The root password to initialize Minio with
+    defaultValue: s3_password
+    required: true
+dockerfile: dockerfile
+defaultFile: dockerfile
+libraryItemId: minio

@@ -4,15 +4,15 @@ FMU Runner - Processes FMU simulation requests from Kafka
 Consumes from 'simulation' topic, filters for .fmu files,
 executes FMU simulation using fmpy, outputs to 'simulation-results' topic.
 
-This is a lightweight alternative to simulink-runner that doesn't require
-MATLAB Runtime - it processes FMU (Functional Mock-up Unit) files instead.
+This is a lightweight runner that doesn't require MATLAB Runtime - it 
+processes FMU (Functional Mock-up Unit) files instead.
 """
 import os
 import logging
-import tempfile
 from datetime import datetime, timezone
 
-import requests
+import boto3
+from botocore.client import Config
 from quixstreams import Application
 from dotenv import load_dotenv
 
@@ -28,21 +28,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
-API_URL = os.getenv("API_URL", "http://localhost:80")
-HTTP_AUTH_TOKEN = os.getenv("HTTP_AUTH_TOKEN", "")
+# S3 Configuration
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "minioadmin")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minioadmin")
+S3_BUCKET = os.environ.get("S3_BUCKET", "fmu-models")
 STATE_DIR = os.getenv("state_dir", "state")
+
+# Initialize S3 client
+s3_client = boto3.client(
+    's3',
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
+    config=Config(signature_version='s3v4')
+)
 
 # Ensure state directory exists
 os.makedirs(os.path.join(STATE_DIR, "fmu_cache"), exist_ok=True)
 
 
-def fetch_model_from_api(filename: str) -> bytes:
+def fetch_model_from_s3(s3_path: str) -> bytes:
     """
-    Fetch FMU model binary from the HTTP API.
+    Fetch FMU model binary from S3.
 
     Args:
-        filename: Name of the FMU file to fetch
+        s3_path: S3 object key (e.g., 'models/abc123_BouncingBall.fmu')
 
     Returns:
         Binary content of the FMU file
@@ -50,54 +61,48 @@ def fetch_model_from_api(filename: str) -> bytes:
     Raises:
         RuntimeError: If fetch fails
     """
-    url = f"{API_URL}/models/{filename}"
-    headers = {}
-    if HTTP_AUTH_TOKEN:
-        headers["Authorization"] = f"Bearer {HTTP_AUTH_TOKEN}"
-
-    logger.info(f"Fetching FMU from API: {url}")
+    logger.info(f"Fetching FMU from S3: {s3_path}")
 
     try:
-        response = requests.get(url, headers=headers, timeout=60)
-        response.raise_for_status()
-        logger.info(f"Fetched FMU: {len(response.content)} bytes")
-        return response.content
-    except requests.RequestException as e:
-        raise RuntimeError(f"Failed to fetch FMU from API: {e}")
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_path)
+        fmu_bytes = response['Body'].read()
+        logger.info(f"Fetched FMU: {len(fmu_bytes)} bytes")
+        return fmu_bytes
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch FMU from S3: {e}")
 
 
-def get_fmu_path(model_filename: str, model_data: str = None) -> str:
+def get_fmu_path(model_filename: str, model_s3_path: str) -> str:
     """
-    Get path to FMU file, downloading from API if needed.
+    Get path to FMU file, downloading from S3 if needed.
 
     Args:
-        model_filename: Name of the FMU file
-        model_data: Optional base64-encoded FMU data
+        model_filename: Name of the FMU file (for cache filename)
+        model_s3_path: S3 object key to fetch the FMU from
 
     Returns:
         Path to the FMU file on disk
     """
-    import base64
-    import hashlib
-
     # Cache directory for FMU files
     cache_dir = os.path.join(STATE_DIR, "fmu_cache")
 
-    if model_data:
-        # Decode from base64 and cache
-        fmu_bytes = base64.b64decode(model_data)
-        file_hash = hashlib.sha256(fmu_bytes).hexdigest()[:16]
-    else:
-        # Fetch from API
-        fmu_bytes = fetch_model_from_api(model_filename)
-        file_hash = hashlib.sha256(fmu_bytes).hexdigest()[:16]
+    # Use the S3 path as cache key (it includes hash already)
+    # Extract just the filename part from s3 path for local cache
+    cache_filename = os.path.basename(model_s3_path)
+    fmu_path = os.path.join(cache_dir, cache_filename)
+
+    # Check if already cached
+    if os.path.exists(fmu_path):
+        logger.debug(f"Using cached FMU: {fmu_path}")
+        return fmu_path
+
+    # Fetch from S3
+    fmu_bytes = fetch_model_from_s3(model_s3_path)
 
     # Save to cache
-    fmu_path = os.path.join(cache_dir, f"{file_hash}_{model_filename}")
-    if not os.path.exists(fmu_path):
-        with open(fmu_path, 'wb') as f:
-            f.write(fmu_bytes)
-        logger.info(f"Cached FMU at: {fmu_path}")
+    with open(fmu_path, 'wb') as f:
+        f.write(fmu_bytes)
+    logger.info(f"Cached FMU at: {fmu_path}")
 
     return fmu_path
 
@@ -126,11 +131,12 @@ def process_message(row: dict) -> dict:
     started_at = datetime.now(timezone.utc)
 
     try:
-        # Get FMU file path
-        fmu_path = get_fmu_path(
-            model_filename,
-            row.get("model_data")
-        )
+        # Get FMU file path from S3
+        model_s3_path = row.get("model_s3_path")
+        if not model_s3_path:
+            raise RuntimeError(f"No model_s3_path provided for: {model_filename}")
+
+        fmu_path = get_fmu_path(model_filename, model_s3_path)
 
         # Extract simulation config
         config = row.get("config", {})
@@ -160,6 +166,7 @@ def process_message(row: dict) -> dict:
             "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
             "processing_time_ms": processing_time_ms,
             "model_filename": model_filename,
+            "model_s3_path": model_s3_path,  # Pass through for downstream services
             "config": config,
             "source": row.get("source", "user"),
             "status": result["status"],
@@ -186,6 +193,7 @@ def process_message(row: dict) -> dict:
             "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
             "processing_time_ms": processing_time_ms,
             "model_filename": model_filename,
+            "model_s3_path": row.get("model_s3_path"),  # Pass through for downstream services
             "config": row.get("config", {}),
             "source": row.get("source", "user"),
             "status": "error",
@@ -198,7 +206,8 @@ def main():
     """Main entry point for the FMU Runner service."""
     logger.info("=" * 60)
     logger.info("FMU Runner Service Starting")
-    logger.info(f"  API URL: {API_URL}")
+    logger.info(f"  S3 Endpoint: {S3_ENDPOINT}")
+    logger.info(f"  S3 Bucket: {S3_BUCKET}")
     logger.info(f"  State dir: {STATE_DIR}")
     logger.info("=" * 60)
 

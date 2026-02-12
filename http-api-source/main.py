@@ -1,12 +1,16 @@
 import os
 import json
 import base64
-from datetime import datetime, timezone, timedelta
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
-from flask import Flask, request, redirect, abort, jsonify, send_file, send_from_directory
+from flask import Flask, request, redirect, abort, jsonify, send_from_directory
 from flasgger import Swagger
 from waitress import serve
 from functools import wraps
+
+import boto3
+from botocore.client import Config
 
 from flask_cors import CORS
 
@@ -14,16 +18,23 @@ from setup_logging import get_logger
 from quixstreams import Application
 from datalake_query import DataLakeQuery
 
-# Directory for stored models - use state directory if available (persists across restarts)
-STATE_DIR = Path(os.environ.get("state_dir", "state"))
-MODELS_DIR = STATE_DIR / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
 # Frontend static files directory
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
-# Model retention period (24 hours)
-MODEL_RETENTION_HOURS = 24
+# S3 Configuration
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "minioadmin")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minioadmin")
+S3_BUCKET = os.environ.get("S3_BUCKET", "fmu-models")
+
+# Initialize S3 client
+s3_client = boto3.client(
+    's3',
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
+    config=Config(signature_version='s3v4')
+)
 
 # for local dev, load env vars from a .env file
 from dotenv import load_dotenv
@@ -98,40 +109,163 @@ def generate_message_key(model_filename: str) -> str:
     return f"{timestamp}_{model_filename}"
 
 
-def cleanup_old_models():
-    """Delete models older than MODEL_RETENTION_HOURS."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=MODEL_RETENTION_HOURS)
-    deleted_count = 0
-
-    for model_path in MODELS_DIR.glob("*"):
-        if model_path.is_file():
-            # Use file modification time for age check
-            mtime = datetime.fromtimestamp(model_path.stat().st_mtime, tz=timezone.utc)
-            if mtime < cutoff:
-                model_path.unlink()
-                deleted_count += 1
-                logger.info(f"Deleted old model: {model_path.name}")
-
-    if deleted_count > 0:
-        logger.info(f"Cleaned up {deleted_count} old model(s)")
+def ensure_bucket_exists():
+    """Ensure the S3 bucket exists, create if not."""
+    try:
+        s3_client.head_bucket(Bucket=S3_BUCKET)
+    except Exception:
+        try:
+            s3_client.create_bucket(Bucket=S3_BUCKET)
+            logger.info(f"Created S3 bucket: {S3_BUCKET}")
+        except Exception as e:
+            logger.warning(f"Could not create bucket (may already exist): {e}")
 
 
-def store_model(filename: str, data_base64: str) -> Path:
+def extract_fmu_metadata(fmu_bytes: bytes, filename: str) -> dict:
     """
-    Store a model file to disk from base64-encoded data.
+    Extract metadata from FMU binary.
+
+    Args:
+        fmu_bytes: FMU file binary content
+        filename: Original filename
+
+    Returns:
+        dict: Metadata including inputs, outputs, parameters
+    """
+    import tempfile
+    from fmpy import read_model_description
+
+    # Write to temp file for fmpy to read
+    with tempfile.NamedTemporaryFile(suffix='.fmu', delete=False) as tmp:
+        tmp.write(fmu_bytes)
+        tmp_path = tmp.name
+
+    try:
+        md = read_model_description(tmp_path)
+
+        def get_type_name(fmu_type):
+            if fmu_type is None:
+                return 'Real'
+            type_name = type(fmu_type).__name__
+            if type_name in ('Real', 'Integer', 'Boolean', 'String'):
+                return type_name
+            return 'Real'
+
+        variables = {
+            'inputs': [],
+            'outputs': [],
+            'parameters': []
+        }
+
+        for v in md.modelVariables:
+            var_info = {
+                'name': v.name,
+                'type': get_type_name(v.type),
+                'start': getattr(v, 'start', None),
+                'description': v.description or ''
+            }
+
+            if v.causality == 'input':
+                variables['inputs'].append(var_info)
+            elif v.causality == 'output':
+                variables['outputs'].append(var_info)
+            elif v.causality == 'parameter':
+                variables['parameters'].append(var_info)
+
+        return {
+            'filename': filename,
+            'modelName': md.modelName,
+            'fmiVersion': md.fmiVersion,
+            'description': md.description or '',
+            'generationTool': getattr(md, 'generationTool', '') or '',
+            'variables': variables
+        }
+    finally:
+        os.unlink(tmp_path)
+
+
+def store_model_to_s3(filename: str, data_base64: str) -> dict:
+    """
+    Store a model file and its metadata to S3.
 
     Args:
         filename: Original filename of the model
         data_base64: Base64-encoded model binary
 
     Returns:
-        Path: Path to the stored model file
+        dict: Contains 'model_s3_path' and 'metadata_s3_path'
     """
-    model_path = MODELS_DIR / filename
+    ensure_bucket_exists()
+
     model_bytes = base64.b64decode(data_base64)
-    model_path.write_bytes(model_bytes)
-    logger.info(f"Stored model: {filename} ({len(model_bytes)} bytes)")
-    return model_path
+    file_hash = hashlib.sha256(model_bytes).hexdigest()[:16]
+
+    # S3 keys
+    model_key = f"models/{file_hash}_{filename}"
+    metadata_key = f"models/{file_hash}_{filename}.metadata.json"
+
+    # Check if model already exists
+    try:
+        s3_client.head_object(Bucket=S3_BUCKET, Key=model_key)
+        logger.info(f"Model already exists in S3: {model_key}")
+    except Exception:
+        # Upload model
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=model_key,
+            Body=model_bytes,
+            ContentType='application/octet-stream'
+        )
+        logger.info(f"Uploaded model to S3: {model_key} ({len(model_bytes)} bytes)")
+
+    # Extract and upload metadata for FMU files
+    if filename.lower().endswith('.fmu'):
+        try:
+            metadata = extract_fmu_metadata(model_bytes, filename)
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=metadata_key,
+                Body=json.dumps(metadata, indent=2),
+                ContentType='application/json'
+            )
+            logger.info(f"Uploaded metadata to S3: {metadata_key}")
+        except Exception as e:
+            logger.warning(f"Failed to extract/upload FMU metadata: {e}")
+            metadata_key = None
+
+    return {
+        'model_s3_path': model_key,
+        'metadata_s3_path': metadata_key
+    }
+
+
+def get_model_s3_path(filename: str) -> str:
+    """
+    Find an existing model in S3 by filename.
+
+    Args:
+        filename: Original filename to search for
+
+    Returns:
+        str: S3 key if found, None otherwise
+    """
+    try:
+        # List objects with the models/ prefix and look for matching filename
+        response = s3_client.list_objects_v2(
+            Bucket=S3_BUCKET,
+            Prefix='models/'
+        )
+
+        for obj in response.get('Contents', []):
+            key = obj['Key']
+            # Key format: models/{hash}_{filename}
+            if key.endswith(f'_{filename}') and not key.endswith('.metadata.json'):
+                return key
+
+        return None
+    except Exception as e:
+        logger.error(f"Error searching for model in S3: {e}")
+        return None
 
 
 
@@ -159,7 +293,7 @@ def post_simulation():
               example: "BouncingBall.fmu"
             model_data:
               type: string
-              description: Base64-encoded FMU binary (optional if model already exists on server)
+              description: Base64-encoded FMU binary (optional if model already exists in S3)
             input_data:
               type: array
               description: Input data rows (converted from CSV)
@@ -182,6 +316,9 @@ def post_simulation():
             message_key:
               type: string
               example: "2024-02-02T12:30:00_BouncingBall.fmu"
+            model_s3_path:
+              type: string
+              example: "models/abc123_BouncingBall.fmu"
       400:
         description: Invalid request payload
       401:
@@ -198,33 +335,38 @@ def post_simulation():
             return jsonify({"error": f"Missing required field: {field}"}), 400
 
     model_filename = data['model_filename']
-    model_path = MODELS_DIR / model_filename
+    model_s3_path = None
+    metadata_s3_path = None
 
-    # If data is provided, store the new model
-    # If data is not provided, check if model already exists on disk
+    # If data is provided, store the new model to S3
+    # If data is not provided, check if model already exists in S3
     if data.get('model_data'):
-        store_model(model_filename, data['model_data'])
-    elif not model_path.exists():
-        return jsonify({"error": f"Model not found: {model_filename}. Please upload the model file."}), 400
+        s3_result = store_model_to_s3(model_filename, data['model_data'])
+        model_s3_path = s3_result['model_s3_path']
+        metadata_s3_path = s3_result.get('metadata_s3_path')
     else:
-        logger.info(f"Using existing model: {model_filename}")
+        # Look for existing model in S3
+        model_s3_path = get_model_s3_path(model_filename)
+        if not model_s3_path:
+            return jsonify({"error": f"Model not found: {model_filename}. Please upload the model file."}), 400
+        logger.info(f"Using existing model from S3: {model_s3_path}")
 
     # Generate message key
     message_key = generate_message_key(model_filename)
 
-    # Add metadata to payload - only pass model reference, not the binary data
+    # Add metadata to payload - pass S3 path for direct fetching
     payload = {
         "message_key": message_key,
         "submitted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "model_filename": model_filename,
-        # Note: 'model_data' field is intentionally omitted - services fetch via API
+        "model_s3_path": model_s3_path,  # S3 key for direct fetching
         "input_data": data['input_data'],
         "config": data['config'],
         "source": "user"  # Flag to indicate user-initiated (vs system-initiated retries)
     }
 
     logger.debug(f"Submitting simulation: {message_key}")
-    logger.debug(f"Model: {model_filename} (stored to disk), Input rows: {len(data['input_data'])}")
+    logger.debug(f"Model: {model_filename} (S3: {model_s3_path}), Input rows: {len(data['input_data'])}")
 
     # Publish to Kafka
     producer.produce(
@@ -237,7 +379,9 @@ def post_simulation():
 
     return jsonify({
         "status": "submitted",
-        "message_key": message_key
+        "message_key": message_key,
+        "model_s3_path": model_s3_path,
+        "metadata_s3_path": metadata_s3_path
     }), 200
 
 
@@ -253,140 +397,53 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 
-@app.route("/models/<filename>", methods=['GET'])
+@app.route("/models/<path:s3_path>/metadata", methods=['GET'])
 @require_auth
-def get_model(filename):
+def get_model_metadata_from_s3(s3_path):
     """
-    Retrieve a stored model file
+    Get metadata for an FMU model from S3
     ---
     parameters:
       - in: path
-        name: filename
+        name: s3_path
         type: string
         required: true
-        description: The filename of the model to retrieve
-    responses:
-      200:
-        description: Model file binary
-        content:
-          application/octet-stream:
-            schema:
-              type: string
-              format: binary
-      404:
-        description: Model not found
-      401:
-        description: Missing or malformed Authorization header
-      403:
-        description: Invalid token
-    """
-    model_path = MODELS_DIR / filename
-
-    if not model_path.exists():
-        return jsonify({"error": f"Model not found: {filename}"}), 404
-
-    logger.debug(f"Serving model: {filename}")
-    return send_file(model_path, mimetype='application/octet-stream', as_attachment=True, download_name=filename)
-
-
-@app.route("/models/<filename>/metadata", methods=['GET'])
-@require_auth
-def get_model_metadata(filename):
-    """
-    Get metadata for an FMU model file (inputs, outputs, parameters)
-    ---
-    parameters:
-      - in: path
-        name: filename
-        type: string
-        required: true
-        description: The filename of the FMU model
+        description: The S3 path of the FMU model (e.g., models/abc123_BouncingBall.fmu)
     responses:
       200:
         description: FMU metadata including inputs, outputs, and parameters
       404:
-        description: Model not found
-      400:
-        description: Not an FMU file
+        description: Metadata not found
       401:
         description: Missing or malformed Authorization header
       403:
         description: Invalid token
     """
-    model_path = MODELS_DIR / filename
-
-    if not model_path.exists():
-        return jsonify({"error": f"Model not found: {filename}"}), 404
-
-    # Only process FMU files
-    if not filename.lower().endswith('.fmu'):
-        return jsonify({
-            "model_type": "simulink",
-            "message": "Metadata extraction only available for FMU files"
-        }), 200
+    # Construct metadata key from model path
+    metadata_key = f"{s3_path}.metadata.json"
 
     try:
-        from fmpy import read_model_description
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=metadata_key)
+        metadata = json.loads(response['Body'].read().decode('utf-8'))
 
-        md = read_model_description(str(model_path))
-
-        def get_type_name(fmu_type):
-            """Extract type name string from FMU type object."""
-            if fmu_type is None:
-                return 'Real'
-            type_name = type(fmu_type).__name__
-            if type_name in ('Real', 'Integer', 'Boolean', 'String'):
-                return type_name
-            return 'Real'
-
-        # Categorize variables by causality
-        variables = {
-            'inputs': [],
-            'outputs': [],
-            'parameters': [],
-            'local': [],
-            'other': []
-        }
-
-        for v in md.modelVariables:
-            var_info = {
-                'name': v.name,
-                'valueReference': v.valueReference,
-                'description': v.description or '',
-                'type': get_type_name(v.type),
-                'start': getattr(v, 'start', None),
-                'causality': v.causality,
-                'variability': getattr(v, 'variability', None),
-            }
-
-            if v.causality == 'input':
-                variables['inputs'].append(var_info)
-            elif v.causality == 'output':
-                variables['outputs'].append(var_info)
-            elif v.causality == 'parameter':
-                variables['parameters'].append(var_info)
-            elif v.causality == 'local':
-                variables['local'].append(var_info)
-            else:
-                variables['other'].append(var_info)
-
-        model_info = {
-            'model_type': 'fmu',
-            'modelName': md.modelName,
-            'fmiVersion': md.fmiVersion,
-            'description': md.description or '',
-            'generationTool': getattr(md, 'generationTool', '') or '',
-        }
-
+        # Format response to match frontend expectations
         return jsonify({
             'success': True,
-            'modelInfo': model_info,
-            'variables': variables
+            'modelInfo': {
+                'model_type': 'fmu',
+                'modelName': metadata.get('modelName', ''),
+                'fmiVersion': metadata.get('fmiVersion', ''),
+                'description': metadata.get('description', ''),
+                'generationTool': metadata.get('generationTool', ''),
+            },
+            'variables': metadata.get('variables', {})
         }), 200
 
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({"error": f"Metadata not found for: {s3_path}"}), 404
     except Exception as e:
-        logger.error(f"Failed to read FMU metadata: {e}")
-        return jsonify({"error": f"Failed to read FMU metadata: {str(e)}"}), 500
+        logger.error(f"Failed to fetch metadata from S3: {e}")
+        return jsonify({"error": f"Failed to fetch metadata: {str(e)}"}), 500
 
 
 @app.route("/runs/<message_key>", methods=['GET'])
@@ -534,14 +591,14 @@ def get_related_runs(message_key):
 
 
 if __name__ == '__main__':
-    # Cleanup old models on startup
-    cleanup_old_models()
+    # Ensure S3 bucket exists on startup
+    ensure_bucket_exists()
 
     print("=" * 60)
     print(" " * 15 + "SIMULATION API")
     print("=" * 60)
-    print(f"Model storage: {MODELS_DIR}")
-    print(f"Model retention: {MODEL_RETENTION_HOURS} hours")
+    print(f"S3 Endpoint: {S3_ENDPOINT}")
+    print(f"S3 Bucket: {S3_BUCKET}")
     print(
         f"""
 Submit an FMU simulation:

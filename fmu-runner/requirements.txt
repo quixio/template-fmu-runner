@@ -3,7 +3,7 @@ fmpy>=0.3.0
 numpy
 pandas
 python-dotenv
-requests
+boto3
 
 # Testing
 pytest>=7.0.0

@@ -5,4 +5,5 @@ flasgger==0.9.7b2
 waitress
 python-dotenv
 fmpy>=0.3.0
+boto3
 ./quixlake_sdk-0.2.1-py3-none-any.whl

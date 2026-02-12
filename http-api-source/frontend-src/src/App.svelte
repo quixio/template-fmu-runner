@@ -121,7 +121,7 @@
         fmuMetadataError = null;
 
         try {
-            // First, upload the model to the server
+            // First, upload the model to S3 via the API
             const authToken = (window.__HTTP_AUTH_TOKEN__ && !window.__HTTP_AUTH_TOKEN__.startsWith('__RUNTIME_'))
                 ? window.__HTTP_AUTH_TOKEN__
                 : '';
@@ -139,16 +139,26 @@
                 headers['Authorization'] = `Bearer ${authToken}`;
             }
 
-            // Submit to trigger model storage (we won't actually run simulation)
-            // This stores the model on the server so we can query metadata
-            await fetch('/simulation', {
+            // Submit to trigger model storage in S3 - response includes S3 paths
+            const uploadResponse = await fetch('/simulation', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(uploadPayload)
             });
 
-            // Now fetch the metadata
-            const metadataResponse = await fetch(`/models/${encodeURIComponent(file.name)}/metadata`, {
+            if (!uploadResponse.ok) {
+                throw new Error('Failed to upload model');
+            }
+
+            const uploadResult = await uploadResponse.json();
+            const modelS3Path = uploadResult.model_s3_path;
+
+            if (!modelS3Path) {
+                throw new Error('No S3 path returned from upload');
+            }
+
+            // Now fetch the metadata using the S3 path
+            const metadataResponse = await fetch(`/models/${encodeURIComponent(modelS3Path)}/metadata`, {
                 headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
             });
 

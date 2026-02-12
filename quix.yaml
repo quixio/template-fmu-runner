@@ -41,6 +41,22 @@ deployments:
         description: QuixLake API URL for data lake queries
         required: true
         value: https://quixlake-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+      - name: S3_ENDPOINT
+        inputType: FreeText
+        description: S3/MinIO endpoint URL for storing FMU models.
+        value: http://minio:80
+      - name: S3_ACCESS_KEY
+        inputType: Secret
+        description: S3 access key ID.
+        secretKey: s3_user
+      - name: S3_SECRET_KEY
+        inputType: Secret
+        description: S3 secret access key.
+        secretKey: s3_password
+      - name: S3_BUCKET
+        inputType: FreeText
+        description: S3 bucket name for FMU models.
+        value: fmu-models
     plugin:
       embeddedView:
         enabled: true
@@ -71,36 +87,22 @@ deployments:
         inputType: OutputTopic
         description: Name of the output topic to write simulation results to.
         value: simulation-results
-      - name: API_URL
+      - name: S3_ENDPOINT
         inputType: FreeText
-        description: URL of the Simulation API for fetching FMU model binaries
-        value: http://simulation-api:80
-      - name: HTTP_AUTH_TOKEN
+        description: S3/MinIO endpoint URL for fetching FMU model binaries.
+        value: http://minio:80
+      - name: S3_ACCESS_KEY
         inputType: Secret
-        description: Auth token for API requests (shared with Simulation API)
-        required: true
-        secretKey: http_auth_token
-  - name: Validator
-    application: validator
-    version: latest
-    deploymentType: Service
-    resources:
-      cpu: 200
-      memory: 500
-      replicas: 1
-    variables:
-      - name: input
-        inputType: InputTopic
-        description: Name of the input topic to listen to (simulation results).
-        value: simulation-results
-      - name: output_success
-        inputType: OutputTopic
-        description: Name of the output topic for successful validations.
-        value: validation-success
-      - name: output_failure
-        inputType: OutputTopic
-        description: Name of the output topic for failed validations.
-        value: validation-failure
+        description: S3 access key ID.
+        secretKey: s3_user
+      - name: S3_SECRET_KEY
+        inputType: Secret
+        description: S3 secret access key.
+        secretKey: s3_password
+      - name: S3_BUCKET
+        inputType: FreeText
+        description: S3 bucket name for FMU models.
+        value: fmu-models
   - name: Test Generator
     application: test-generator
     version: latest
@@ -225,6 +227,51 @@ deployments:
         inputType: FreeText
         description: How many files can be written in parallel to S3 at once (based on partitioning + batch size)
         value: 10
+  - name: Run Validation
+    application: validator
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 500
+      replicas: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Name of the input topic to listen to (simulation results).
+        value: simulation-results
+      - name: output_success
+        inputType: OutputTopic
+        description: Name of the output topic for successful validations.
+        value: validation-success
+      - name: output_failure
+        inputType: OutputTopic
+        description: Name of the output topic for failed validations.
+        value: validation-failure
+  - name: MinIO
+    application: minio
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 200
+      memory: 800
+      replicas: 1
+    network:
+      serviceName: minio
+      ports:
+        - port: 80
+          targetPort: 9000
+    variables:
+      - name: MINIO_ROOT_USER
+        inputType: FreeText
+        description: The root username to initialize Minio with
+        required: true
+        value: admin
+      - name: MINIO_ROOT_PASSWORD
+        inputType: Secret
+        description: The root password to initialize Minio with
+        required: true
+        secretKey: s3_password
 
 # This section describes the Topics of the data pipeline
 topics:

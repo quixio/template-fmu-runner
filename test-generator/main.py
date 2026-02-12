@@ -115,7 +115,8 @@ def generate_test_payloads(row: dict, num_tests: int) -> list:
         new_payload = {
             "message_key": f"{message_key}_gen_{i+1}",
             "submitted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "model_filename": row.get("model_filename", ""),  # Pass model reference - binary fetched via API
+            "model_filename": row.get("model_filename", ""),  # Keep for display
+            "model_s3_path": row.get("model_s3_path", ""),  # S3 path for fetching model
             "input_data": [],  # Clear input_data - simulation will generate new data
             "config": new_config,  # Contains success_criteria for validation
             "source": "system",  # Mark as system-generated to prevent loops
