@@ -57,6 +57,10 @@ deployments:
         inputType: FreeText
         description: S3 bucket name for FMU models.
         value: fmu-models
+      - name: USE_LOCAL_STORE
+        inputType: FreeText
+        description: Use local Kafka consumer for results instead of QuixLake API
+        value: "true"
     plugin:
       embeddedView:
         enabled: true
