@@ -87,7 +87,7 @@ variables:
   - name: AWS_ENDPOINT_URL
     inputType: FreeText
     description: S3 endpoint url (for non-AWS endpoints)
-    defaultValue: http://minio:80
+    defaultValue: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
   - name: LOGLEVEL
     inputType: FreeText
     description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)

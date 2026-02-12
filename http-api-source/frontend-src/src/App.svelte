@@ -1,6 +1,6 @@
 <script>
     import './app.css';
-    import { onDestroy } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import Dropzone from './lib/Dropzone.svelte';
     import CsvPreview from './lib/CsvPreview.svelte';
     import JsonEditor from './lib/JsonEditor.svelte';
@@ -9,7 +9,7 @@
     import RunDetailsPanel from './lib/RunDetailsPanel.svelte';
     import Toast from './lib/Toast.svelte';
     import { runHistory } from './lib/stores/runHistory.js';
-    import { startPolling, completionEvents } from './lib/stores/runPolling.js';
+    import { startPolling, completionEvents, isPolling } from './lib/stores/runPolling.js';
 
     // Form state
     let modelFile = null;
@@ -82,6 +82,29 @@
 
     onDestroy(() => {
         unsubscribe();
+    });
+
+    // Resume polling for incomplete runs on page load
+    onMount(() => {
+        const runs = [];
+        const unsub = runHistory.subscribe(r => { runs.length = 0; runs.push(...r); });
+        unsub();
+
+        // Find runs that were submitted but haven't completed yet
+        const incompleteRuns = runs.filter(r =>
+            r.status === 'success' &&
+            r.messageKey &&
+            !r.completionStatus &&
+            !isPolling(r.messageKey)
+        );
+
+        if (incompleteRuns.length > 0) {
+            console.log(`[App] Resuming polling for ${incompleteRuns.length} incomplete run(s)`);
+            for (const run of incompleteRuns) {
+                console.log(`[App] Resuming poll for: ${run.messageKey}`);
+                startPolling(run.messageKey, run.id);
+            }
+        }
     });
 
     function dismissToast(id) {
