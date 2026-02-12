@@ -146,7 +146,7 @@ deployments:
         inputType: FreeText
         description: S3 bucket name for storing Parquet files
         required: true
-        value: quixdatalaketest
+        value: datalake
       - name: S3_PREFIX
         inputType: FreeText
         description: S3 prefix/path for data files
@@ -170,12 +170,12 @@ deployments:
       - name: CATALOG_URL
         inputType: FreeText
         description: REST Catalog URL for optional table registration (leave empty to skip)
-        required: true
-        value: https://iceberg-catalog-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+        required: false
+        value: ""
       - name: CATALOG_AUTH_TOKEN
         inputType: Secret
         description: If using a catalog, the respective auth token to access it
-        required: true
+        required: false
         secretKey: catalog_token
       - name: AUTO_DISCOVER
         inputType: FreeText
@@ -236,7 +236,7 @@ deployments:
         inputType: FreeText
         description: S3 endpoint url (for non-AWS endpoints)
         required: true
-        value: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
+        value: http://minio:80
       - name: LOGLEVEL
         inputType: FreeText
         description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
