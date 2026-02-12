@@ -75,11 +75,11 @@ variables:
   - name: AWS_ACCESS_KEY_ID
     inputType: Secret
     description: AWS Access Key ID for S3 access
-    defaultValue: s3_user
+    secretKey: s3_user
   - name: AWS_SECRET_ACCESS_KEY
     inputType: Secret
     description: AWS Secret Access Key for S3 access
-    defaultValue: s3_password
+    secretKey: s3_password
   - name: AWS_REGION
     inputType: FreeText
     description: AWS region for S3 bucket

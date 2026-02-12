@@ -2,9 +2,9 @@ name: minio
 language: docker
 variables:
   - name: MINIO_ROOT_USER
-    inputType: FreeText
+    inputType: Secret
     description: The root username to initialize Minio with
-    defaultValue: admin
+    secretKey: s3_user
     required: true
   - name: MINIO_ROOT_PASSWORD
     inputType: Secret
