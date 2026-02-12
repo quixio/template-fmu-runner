@@ -133,120 +133,15 @@ deployments:
       memory: 2000
       replicas: 1
     variables:
-      - name: input
-        inputType: InputTopic
-        description: Kafka input topic for validation failures
-        required: true
-        value: validation-failure
-      - name: input_success
-        inputType: InputTopic
-        description: Kafka input topic for validation successes
-        value: validation-success
       - name: S3_BUCKET
         inputType: FreeText
-        description: S3 bucket name for storing Parquet files
-        required: true
-        value: quixdatalaketest
-      - name: S3_PREFIX
-        inputType: FreeText
-        description: S3 prefix/path for data files
-        required: true
-        value: ts_test
-      - name: TABLE_NAME
-        inputType: FreeText
-        description: Table name for data organization and registration, else defaults to topic name
-        required: true
-        value: validation_failures
-      - name: HIVE_COLUMNS
-        inputType: FreeText
-        description: Comma-separated list of columns for Hive partitioning. Include year/month/day/hour to extract from TIMESTAMP_COLUMN (e.g., location,year,month,day,sensor_type)
-        required: true
-        value: model_filename,year,month,day
-      - name: TIMESTAMP_COLUMN
-        inputType: FreeText
-        description: Column containing timestamp values to extract year/month/day/hour from
-        required: true
-        value: ts_ms
-      - name: CATALOG_URL
-        inputType: FreeText
-        description: REST Catalog URL for optional table registration (leave empty to skip)
-        required: true
-        value: https://iceberg-catalog-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
-      - name: CATALOG_AUTH_TOKEN
-        inputType: Secret
-        description: If using a catalog, the respective auth token to access it
-        required: true
-        secretKey: catalog_token
-      - name: AUTO_DISCOVER
-        inputType: FreeText
-        description: Automatically register table in REST Catalog on first write
-        required: true
-        value: true
-      - name: CATALOG_NAMESPACE
-        inputType: FreeText
-        description: Catalog namespace for table registration
-        required: true
-        value: default
-      - name: BATCH_SIZE
-        inputType: FreeText
-        description: Number of messages to batch before writing to S3
-        required: true
-        value: 1000
-      - name: COMMIT_INTERVAL
-        inputType: FreeText
-        description: Kafka commit interval in seconds
-        required: true
-        value: 30
-      - name: KAFKA_KEY_DESERIALIZER
-        inputType: FreeText
-        description: The key deserializer to use
-        required: true
-        value: str
-      - name: KAFKA_VALUE_DESERIALIZER
-        inputType: FreeText
-        description: the value deserializer to use
-        required: true
-        value: json
-      - name: CONSUMER_GROUP
-        inputType: FreeText
-        description: Kafka consumer group name
-        required: true
-        value: s3_direct_sink_v1.0
-      - name: AUTO_OFFSET_RESET
-        inputType: FreeText
-        description: Where to start consuming if no offset exists
-        required: true
-        value: earliest
-      - name: AWS_ACCESS_KEY_ID
-        inputType: Secret
-        description: AWS Access Key ID for S3 access
-        required: true
-        secretKey: s3_user
-      - name: AWS_SECRET_ACCESS_KEY
-        inputType: Secret
-        description: AWS Secret Access Key for S3 access
-        required: true
-        secretKey: s3_password
-      - name: AWS_REGION
-        inputType: FreeText
-        description: AWS region for S3 bucket
-        required: true
-        value: local
+        value: datalake
       - name: AWS_ENDPOINT_URL
         inputType: FreeText
-        description: S3 endpoint url (for non-AWS endpoints)
-        required: true
-        value: https://minioproxy-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
-      - name: LOGLEVEL
+        value: http://minio:80
+      - name: CATALOG_URL
         inputType: FreeText
-        description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        required: true
-        value: INFO
-      - name: MAX_WRITE_WORKERS
-        inputType: FreeText
-        description: How many files can be written in parallel to S3 at once (based on partitioning + batch size)
-        required: true
-        value: 10
+        value: ''
   - name: Run Validation
     application: validator
     version: latest
