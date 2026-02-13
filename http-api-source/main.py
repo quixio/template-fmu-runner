@@ -397,6 +397,77 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 
+@app.route("/poc/minio-test", methods=['GET'])
+def poc_minio_test():
+    """
+    POC: Test MinIO write/read for datalake bucket
+    ---
+    responses:
+      200:
+        description: MinIO read/write test results
+    """
+    from datetime import datetime
+
+    # Use datalake bucket (same as the sink uses)
+    datalake_bucket = "datalake"
+    test_key = f"poc-test/test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    test_content = f"Hello from POC test at {datetime.now().isoformat()}"
+
+    results = {
+        "endpoint": S3_ENDPOINT,
+        "bucket": datalake_bucket,
+        "test_key": test_key,
+        "steps": []
+    }
+
+    try:
+        # Step 1: Ensure bucket exists
+        try:
+            s3_client.head_bucket(Bucket=datalake_bucket)
+            results["steps"].append({"step": "check_bucket", "status": "exists"})
+        except Exception:
+            s3_client.create_bucket(Bucket=datalake_bucket)
+            results["steps"].append({"step": "create_bucket", "status": "created"})
+
+        # Step 2: Write test file
+        s3_client.put_object(
+            Bucket=datalake_bucket,
+            Key=test_key,
+            Body=test_content.encode('utf-8'),
+            ContentType='text/plain'
+        )
+        results["steps"].append({"step": "write", "status": "success", "bytes": len(test_content)})
+
+        # Step 3: Read it back
+        response = s3_client.get_object(Bucket=datalake_bucket, Key=test_key)
+        read_content = response['Body'].read().decode('utf-8')
+        results["steps"].append({"step": "read", "status": "success", "content": read_content})
+
+        # Step 4: Verify content matches
+        if read_content == test_content:
+            results["steps"].append({"step": "verify", "status": "match"})
+        else:
+            results["steps"].append({"step": "verify", "status": "mismatch"})
+
+        # Step 5: List objects in bucket (show what's there)
+        list_response = s3_client.list_objects_v2(Bucket=datalake_bucket, MaxKeys=10)
+        objects = [{"key": obj["Key"], "size": obj["Size"]} for obj in list_response.get("Contents", [])]
+        results["steps"].append({"step": "list", "status": "success", "objects": objects})
+
+        # Step 6: Clean up test file
+        s3_client.delete_object(Bucket=datalake_bucket, Key=test_key)
+        results["steps"].append({"step": "cleanup", "status": "deleted"})
+
+        results["success"] = True
+
+    except Exception as e:
+        results["success"] = False
+        results["error"] = str(e)
+        logger.error(f"POC MinIO test failed: {e}")
+
+    return jsonify(results), 200 if results.get("success") else 500
+
+
 @app.route("/models/<path:s3_path>/metadata", methods=['GET'])
 @require_auth
 def get_model_metadata_from_s3(s3_path):
