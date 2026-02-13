@@ -329,6 +329,45 @@ deployments:
         description: S3 bucket name where FMU models are stored.
         required: true
         value: fmu-models
+  - name: FMU Runner 3
+    application: fmu-runner-3
+    version: latest
+    deploymentType: Service
+    resources:
+      cpu: 500
+      memory: 500
+      replicas: 1
+    variables:
+      - name: input
+        inputType: InputTopic
+        description: Name of the input topic to listen to for simulation requests.
+        required: true
+        value: simulation
+      - name: output
+        inputType: OutputTopic
+        description: Name of the output topic to write simulation results to.
+        required: true
+        value: simulation-results
+      - name: S3_ENDPOINT
+        inputType: FreeText
+        description: S3/MinIO endpoint URL for fetching FMU model binaries.
+        required: true
+        value: http://minio:80
+      - name: S3_ACCESS_KEY
+        inputType: Secret
+        description: S3 access key ID.
+        required: true
+        secretKey: s3_user
+      - name: S3_SECRET_KEY
+        inputType: Secret
+        description: S3 secret access key.
+        required: true
+        secretKey: s3_password
+      - name: S3_BUCKET
+        inputType: FreeText
+        description: S3 bucket name where FMU models are stored.
+        required: true
+        value: fmu-models
 
 # This section describes the Topics of the data pipeline
 topics:
