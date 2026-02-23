@@ -1,0 +1,14 @@
+name: Test Source
+language: python
+variables:
+  - name: output
+    inputType: OutputTopic
+    description: Topic to publish simulation requests to.
+    defaultValue: simulation
+  - name: MODEL_FILENAME
+    inputType: FreeText
+    description: Name of the FMU file to simulate.
+    defaultValue: BouncingBall.fmu
+dockerfile: dockerfile
+runEntryPoint: main.py
+defaultFile: main.py

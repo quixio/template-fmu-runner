@@ -1,121 +1,72 @@
-# FMU Simulation Feedback Loop
+# FMU Runner
 
-An automated parameter optimization system for FMU (Functional Mock-up Unit) simulations. Upload an FMU model with success criteria, and the system will automatically explore parameter variations to find configurations that meet your targets.
+A simple FMU (Functional Mock-up Unit) simulation runner using Kafka/Quix Streams.
 
-## How It Works
+## About This Example
 
-1. **Submit** - Upload an FMU file with a JSON config specifying parameters and success criteria
-2. **Simulate** - The FMU runner executes the simulation using fmpy
-3. **Validate** - The validator checks if the output meets your success criteria (e.g., `max(h) >= 10`)
-4. **Optimize** - If validation fails, the test generator creates parameter variations and resubmits them
-5. **Converge** - The system finds configurations that satisfy your criteria
+This is a **simplified example** designed to demonstrate the core concept of running FMU simulations via a streaming pipeline. It uses static FMU files stored locally within the service.
+
+### Production Considerations
+
+In a real-world implementation, you would typically:
+
+**FMU Storage**
+- Store FMU files in blob storage (S3, Azure Blob, MinIO) rather than bundling them with the service
+- Reference models by URL or storage path in simulation requests
+- Support dynamic model uploads and versioning
+
+**Downstream Processing**
+- Add processing stages to analyse simulation results (validation, aggregation, anomaly detection)
+- Use sinks to persist results to databases, data lakes, or time-series stores for later analysis
+- Implement feedback loops for parameter optimization or automated testing
+
+**Example Production Architecture**
+```
+API/Source → [simulation] → FMU Runner → [results] → Validator → [validated] → Data Lake Sink
+                                ↑                         ↓
+                           Blob Storage            Parameter Optimizer
+```
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   HTTP API  │───▶│  FMU Runner │────▶│  Validator  │
-│  (Frontend) │     │   (fmpy)    │     │             │
-└─────────────┘     └─────────────┘     └──────┬──────┘
-                                               │
-                    ┌─────────────┐             │
-                    │    Test     │◀────────────┘
-                    │  Generator  │   (on failure)
-                    └─────────────┘
+Test Source → [simulation] → FMU Runner → [simulation-results]
 ```
 
-### Services
+- **Test Source**: Publishes simulation requests to the `simulation` topic
+- **FMU Runner**: Executes FMU simulations using fmpy and publishes results
 
-| Service | Purpose |
-|---------|---------|
-| **HTTP API** | Web frontend for uploading FMUs and viewing results |
-| **FMU Runner** | Executes FMU simulations using fmpy |
-| **Validator** | Checks if simulation output meets success criteria |
-| **Test Generator** | Creates parameter variations when validation fails |
+## Setup
 
-### Infrastructure
+1. Place your FMU file in `fmu-runner/fmu_files/` (e.g., `BouncingBall.fmu`)
+2. Configure `MODEL_FILENAME` in test-source to match your FMU file
 
-| Component | Purpose |
-|-----------|---------|
-| **Redpanda** | Kafka-compatible message broker |
-| **MinIO** | S3-compatible object storage for results |
+## Message Format
 
-## Configuration Format
+### Input (simulation topic)
 
 ```json
 {
-  "start_time": 0,
-  "stop_time": 10,
-  "parameters": {
-    "g": -9.81,
-    "e": 0.7
+  "message_key": "2024-02-23T12:30:00_BouncingBall.fmu",
+  "submitted_at": "2024-02-23T12:30:00Z",
+  "model_filename": "BouncingBall.fmu",
+  "config": {
+    "start_time": 0,
+    "stop_time": 10,
+    "parameters": {}
   },
-  "success_criteria": {
-    "field_name": "h",
-    "target_value": 1.0
-  }
+  "input_data": []
 }
 ```
 
-- **start_time / stop_time**: Simulation time range
-- **parameters**: FMU parameter overrides (optional)
-- **success_criteria**: Validation rule - `max(field_name) >= target_value`
-
-## Local Development
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Node.js 20+ (for frontend development)
-
-### Running Locally
-
-```bash
-docker-compose -f docker-compose.local.yml up --build
-```
-
-Access the frontend at http://localhost:80
-
-### Environment Variables
-
-| Variable | Service | Description |
-|----------|---------|-------------|
-| `HTTP_AUTH_TOKEN` | All | Bearer token for API authentication |
-| `Quix__Broker__Address` | All | Kafka broker address |
-
-## Quix Cloud Deployment
-
-This project is designed to run on [Quix Cloud](https://quix.io). See [SETUP.md](SETUP.md) for deployment instructions.
-
-### Syncing
-
-After cloning the template, sync to deploy all services:
-
-1. Press the **Sync** button in the Quix UI
-2. Configure required secrets when prompted
-3. Wait for all services to start (may take a few restart cycles)
-
-## Example: BouncingBall FMU
-
-The classic BouncingBall FMU simulates a ball dropped from a height:
-
-- **Outputs**: `h` (height), `v` (velocity)
-- **Parameters**: `g` (gravity), `e` (restitution coefficient)
-
-Example config to find parameters where max height reaches 1.5m:
+### Output (simulation-results topic)
 
 ```json
 {
-  "start_time": 0,
-  "stop_time": 10,
-  "parameters": {
-    "g": -9.81,
-    "e": 0.7
-  },
-  "success_criteria": {
-    "field_name": "h",
-    "target_value": 1.5
-  }
+  "message_key": "2024-02-23T12:30:00_BouncingBall.fmu",
+  "status": "success",
+  "processing_time_ms": 150,
+  "input_data": [...]
 }
 ```
 
@@ -123,7 +74,5 @@ Example config to find parameters where max height reaches 1.5m:
 
 | Topic | Description |
 |-------|-------------|
-| `simulation` | Incoming simulation requests |
-| `simulation-results` | Raw simulation output data |
-| `validation-success` | Runs that passed validation |
-| `validation-failure` | Runs that failed validation |
+| `simulation` | Simulation requests |
+| `simulation-results` | Simulation output data |

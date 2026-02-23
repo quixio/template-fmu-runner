@@ -1,6 +1,0 @@
-services:
-  test-bouncing-ball:
-    build:
-      context: .
-      dockerfile: dockerfile.test
-    container_name: test-bouncing-ball

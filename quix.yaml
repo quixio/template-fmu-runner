@@ -6,67 +6,26 @@ metadata:
 
 # This section describes the Deployments of the data pipeline
 deployments:
-  - name: Simulation API & UI
-    application: http-api-source
+  - name: Test Source
+    application: test-source
     version: latest
     deploymentType: Service
     resources:
       cpu: 200
       memory: 500
       replicas: 1
-    publicAccess:
-      enabled: true
-      urlPrefix: simulation-api
-    state:
-      enabled: true
-      size: 1
-    network:
-      serviceName: simulation-api
-      ports:
-        - port: 80
-          targetPort: 80
     variables:
       - name: output
         inputType: OutputTopic
-        description: The Kafka topic to publish simulation requests to.
+        description: Topic to publish simulation requests to.
         required: true
         value: simulation
-      - name: HTTP_AUTH_TOKEN
-        inputType: Secret
-        description: A security token for authorizing simulation submissions.
+      - name: MODEL_FILENAME
+        inputType: FreeText
+        description: Name of the FMU file to simulate.
         required: true
-        secretKey: http_auth_token
-      - name: QUIXLAKE_API_URL
-        inputType: FreeText
-        description: QuixLake API URL for data lake queries
-        required: true
-        value: https://quixlake-quixers-quixlakev2timeseries-prod.az-france-0.app.quix.io
-      - name: S3_ENDPOINT
-        inputType: FreeText
-        description: S3/MinIO endpoint URL for storing FMU models.
-        value: http://minio:80
-      - name: S3_ACCESS_KEY
-        inputType: Secret
-        description: S3 access key ID.
-        secretKey: s3_user
-      - name: S3_SECRET_KEY
-        inputType: Secret
-        description: S3 secret access key.
-        secretKey: s3_password
-      - name: S3_BUCKET
-        inputType: FreeText
-        description: S3 bucket name for FMU models.
-        value: fmu-models
-    plugin:
-      embeddedView:
-        enabled: true
-        hideHeader: true
-        default: true
-      sidebarItem:
-        show: true
-        label: FMU Runner
-        icon: drag_indicator
-        order: 1
+        value: BouncingBall.fmu
+
   - name: FMU Runner
     application: fmu-runner
     version: latest
@@ -75,237 +34,21 @@ deployments:
       cpu: 200
       memory: 500
       replicas: 1
-    state:
-      enabled: true
-      size: 1
     variables:
       - name: input
         inputType: InputTopic
-        description: Name of the input topic to listen to (simulation requests from HTTP API).
+        description: Name of the input topic to listen to.
+        required: true
         value: simulation
       - name: output
         inputType: OutputTopic
         description: Name of the output topic to write simulation results to.
+        required: true
         value: simulation-results
-      - name: S3_ENDPOINT
-        inputType: FreeText
-        description: S3/MinIO endpoint URL for fetching FMU model binaries.
-        value: http://minio:80
-      - name: S3_ACCESS_KEY
-        inputType: Secret
-        description: S3 access key ID.
-        secretKey: s3_user
-      - name: S3_SECRET_KEY
-        inputType: Secret
-        description: S3 secret access key.
-        secretKey: s3_password
-      - name: S3_BUCKET
-        inputType: FreeText
-        description: S3 bucket name for FMU models.
-        value: fmu-models
-  - name: Test Generator
-    application: test-generator
-    version: latest
-    deploymentType: Service
-    resources:
-      cpu: 200
-      memory: 500
-      replicas: 1
-    variables:
-      - name: input
-        inputType: InputTopic
-        description: Topic for failed validations.
-        value: validation-failure
-      - name: output
-        inputType: OutputTopic
-        description: Topic to publish new test configurations.
-        value: simulation
-      - name: NUM_TESTS
-        inputType: FreeText
-        description: Number of test variations to generate per failure.
-        value: 10
-  - name: Quix DataLake Timeseries Sink
-    application: quix-datalake-timeseries-sink
-    version: latest
-    deploymentType: Service
-    resources:
-      cpu: 200
-      memory: 2000
-      replicas: 1
-    variables:
-      - name: input
-        inputType: InputTopic
-        description: Kafka input topic for validation failures
-        required: true
-        value: validation-failure
-      - name: input_success
-        inputType: InputTopic
-        description: Kafka input topic for validation successes
-        value: validation-success
-      - name: S3_BUCKET
-        inputType: FreeText
-        description: S3 bucket name for storing Parquet files
-        required: true
-        value: datalake
-      - name: S3_PREFIX
-        inputType: FreeText
-        description: S3 prefix/path for data files
-        required: true
-        value: ts_test
-      - name: TABLE_NAME
-        inputType: FreeText
-        description: Table name for data organization and registration, else defaults to topic name
-        required: true
-        value: validation_failures
-      - name: HIVE_COLUMNS
-        inputType: FreeText
-        description: Comma-separated list of columns for Hive partitioning. Include year/month/day/hour to extract from TIMESTAMP_COLUMN (e.g., location,year,month,day,sensor_type)
-        required: true
-        value: model_filename,year,month,day
-      - name: TIMESTAMP_COLUMN
-        inputType: FreeText
-        description: Column containing timestamp values to extract year/month/day/hour from
-        required: true
-        value: ts_ms
-      - name: CATALOG_URL
-        inputType: FreeText
-        description: REST Catalog URL for optional table registration (leave empty to skip)
-        required: false
-        value: ""
-      - name: CATALOG_AUTH_TOKEN
-        inputType: Secret
-        description: If using a catalog, the respective auth token to access it
-        required: false
-        secretKey: catalog_token
-      - name: AUTO_DISCOVER
-        inputType: FreeText
-        description: Automatically register table in REST Catalog on first write
-        required: true
-        value: true
-      - name: CATALOG_NAMESPACE
-        inputType: FreeText
-        description: Catalog namespace for table registration
-        required: true
-        value: default
-      - name: BATCH_SIZE
-        inputType: FreeText
-        description: Number of messages to batch before writing to S3
-        required: true
-        value: 1000
-      - name: COMMIT_INTERVAL
-        inputType: FreeText
-        description: Kafka commit interval in seconds
-        required: true
-        value: 30
-      - name: KAFKA_KEY_DESERIALIZER
-        inputType: FreeText
-        description: The key deserializer to use
-        required: true
-        value: str
-      - name: KAFKA_VALUE_DESERIALIZER
-        inputType: FreeText
-        description: the value deserializer to use
-        required: true
-        value: json
-      - name: CONSUMER_GROUP
-        inputType: FreeText
-        description: Kafka consumer group name
-        required: true
-        value: s3_direct_sink_v1.0
-      - name: AUTO_OFFSET_RESET
-        inputType: FreeText
-        description: Where to start consuming if no offset exists
-        required: true
-        value: earliest
-      - name: AWS_ACCESS_KEY_ID
-        inputType: Secret
-        description: AWS Access Key ID for S3 access
-        required: true
-        secretKey: s3_user
-      - name: AWS_SECRET_ACCESS_KEY
-        inputType: Secret
-        description: AWS Secret Access Key for S3 access
-        required: true
-        secretKey: s3_password
-      - name: AWS_REGION
-        inputType: FreeText
-        description: AWS region for S3 bucket
-        required: true
-        value: local
-      - name: AWS_ENDPOINT_URL
-        inputType: FreeText
-        description: S3 endpoint url (for non-AWS endpoints)
-        required: true
-        value: http://minio:80
-      - name: LOGLEVEL
-        inputType: FreeText
-        description: set application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        required: true
-        value: INFO
-      - name: MAX_WRITE_WORKERS
-        inputType: FreeText
-        description: How many files can be written in parallel to S3 at once (based on partitioning + batch size)
-        required: true
-        value: 10
-  - name: Run Validation
-    application: validator
-    version: latest
-    deploymentType: Service
-    resources:
-      cpu: 200
-      memory: 500
-      replicas: 1
-    variables:
-      - name: input
-        inputType: InputTopic
-        description: Name of the input topic to listen to (simulation results).
-        value: simulation-results
-      - name: output_success
-        inputType: OutputTopic
-        description: Name of the output topic for successful validations.
-        value: validation-success
-      - name: output_failure
-        inputType: OutputTopic
-        description: Name of the output topic for failed validations.
-        value: validation-failure
-  - name: MinIO
-    application: minio
-    version: latest
-    deploymentType: Service
-    resources:
-      cpu: 200
-      memory: 800
-      replicas: 1
-    network:
-      serviceName: minio
-      ports:
-        - port: 80
-          targetPort: 9000
-    variables:
-      - name: MINIO_ROOT_USER
-        inputType: Secret
-        description: The root username to initialize Minio with
-        required: true
-        secretKey: s3_user
-      - name: MINIO_ROOT_PASSWORD
-        inputType: Secret
-        description: The root password to initialize Minio with
-        required: true
-        secretKey: s3_password
 
 # This section describes the Topics of the data pipeline
 topics:
   - name: simulation
     dataTier: Bronze
   - name: simulation-results
-    dataTier: Silver
-  - name: validation-success
-    dataTier: Gold
-  - name: validation-failure
-    dataTier: Silver
-  - name: generated-opc_ua_data
-    dataTier: Bronze
-  - name: http_data
-    dataTier: Bronze
-  - name: normalized_data
     dataTier: Silver
