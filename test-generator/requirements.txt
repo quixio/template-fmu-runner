@@ -1,2 +1,0 @@
-quixstreams>=3.17.0
-python-dotenv
