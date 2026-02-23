@@ -85,7 +85,7 @@ def main():
         # Serialize and send
         producer.produce(
             topic=topic.name,
-            key=message_key.encode(),
+            key=message_key,
             value=request
         )
         producer.flush()
