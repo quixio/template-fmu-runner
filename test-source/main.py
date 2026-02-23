@@ -4,6 +4,7 @@ Test Source - Generates sample simulation requests for FMU Runner
 Publishes simulation requests to the 'simulation' topic.
 """
 import os
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -85,7 +86,7 @@ def main():
         producer.produce(
             topic=topic.name,
             key=message_key.encode(),
-            value=topic.serialize(key=message_key, value=request)
+            value=request
         )
         producer.flush()
 
