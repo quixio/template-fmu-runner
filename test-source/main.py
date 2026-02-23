@@ -74,7 +74,7 @@ def main():
 
     # Create producer and send single request
     with app.get_producer() as producer:
-        topic = app.topic(name=output_topic_name)
+        topic = app.topic(name=output_topic_name, value_serializer="json")
 
         # Create simulation request
         request = create_simulation_request(model_filename)
