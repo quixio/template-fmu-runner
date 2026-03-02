@@ -1,5 +1,7 @@
 # FMU Runner
 
+[![Tests](https://github.com/quixio/template-fmu-runner/actions/workflows/tests.yml/badge.svg)](https://github.com/quixio/template-fmu-runner/actions/workflows/tests.yml)
+
 A simple FMU (Functional Mock-up Unit) simulation runner using Kafka/Quix Streams.
 
 ## About This Example
